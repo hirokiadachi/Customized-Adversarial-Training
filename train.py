@@ -57,10 +57,11 @@ def label_smoothing(targets, epsilon, c, num_classes=10):
 # Loss functions
 #########################################
 class Loss_func():
-    def __init__(self, num_classes=10, loss_type='xent'):
+    def __init__(self, num_classes=10, loss_type='xent', kappa=0):
         self.loss_type = loss_type
         self.num_classes = num_classes
         self.loss_type = loss_type
+        self.kappa = kappa
         
     def xent(self, logits, targets):
         probs = torch.softmax(logits, dim=1)
@@ -68,11 +69,12 @@ class Loss_func():
         return loss
     
     def mix(self, logits, targets, org_targets):
+        probs = torch.softmax(logits, dim=1)
         batch = probs.size(0)
-        class_index = torch.arange(num_classes)[None,:].repeat(batch,1).cuda()
-        false_probs = torch.topk(probs[class_index!=targets[:,None]].view(batch, num_classes-1), k=1).values
-        gt_probs = probs[class_index==targets[:,None]].unsqueeze(1)
-        cw_loss = false_probs - gt_probs
+        class_index = torch.arange(self.num_classes)[None,:].repeat(batch,1).cuda()
+        false_probs = torch.topk(probs[class_index!=org_targets[:,None]].view(batch, self.num_classes-1), k=1).values
+        gt_probs = probs[class_index==org_targets[:,None]].unsqueeze(1)
+        cw_loss = torch.max((false_probs - gt_probs).view(-1), self.kappa*torch.ones(batch).cuda())
         loss = torch.sum(torch.sum(-targets * torch.log(probs), dim=1) + cw_loss)/probs.size(0)
         return loss
     
@@ -221,7 +223,7 @@ if __name__ == '__main__':
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     adjust_lr = lr_scheduler.LambdaLR(optimizer, lr_lambda=func)
     
-    loss_func = Loss_func(num_classes=args.num_classes, loss_type=args.loss_type)
+    loss_func = Loss_func(num_classes=args.num_classes, loss_type=args.loss_type, kappa=args.kappa)
     logger_test = Logger(os.path.join(out_dir, 'log_results.txt'))
     logger_test.set_names(['Epoch', 'Natural Test Acc', 'PGD20 Acc'])
     
