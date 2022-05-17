@@ -7,12 +7,12 @@ Paper: https://arxiv.org/abs/2002.06789
 Model: WideResNet34-10<br>
 Epochs: 200<br>
 Batch size: 128<br>
-Optimizer: SGD
- - momentum: 0.9
- - initial learning rate: 0.1
-   - 80th: 0.01
-   - 140th: 0.001
-   - 180th: 0.0001
+Optimizer: SGD<br>
+(momentum: 0.9)<br>
+(initial learning rate: 0.1)<br>
+(80th: 0.01)<br>
+(140th: 0.001)<br>
+(180th: 0.0001)<br>
 
 * CIFAR10, CrossEntropyLoss
 ```
