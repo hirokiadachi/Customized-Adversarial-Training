@@ -21,4 +21,4 @@ python train.py --dataset cifar10 --num_classes 10 --loss_type xent --gpus 0
 
 |     |Natural|FGSM|PGD-10|PGD-20|PGD-100|PGD-100(CW loss)|CW-20 (l2)|APGD-CE|APGD-DLR|
 |:---:|:-----:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-|CIFAR-10, Xent|93.73|78.86|71.53|68.12|64.36|64.83|68.71|56.12||
+|CIFAR-10, Xent|93.73|78.86|71.53|68.12|64.36|64.83|68.71|56.12|23.91|
