@@ -1,6 +1,8 @@
 import os
 import sys
 import time
+import wandb
+wandb.login()
 import argparse
 import numpy as np
 
@@ -111,9 +113,11 @@ def train(epoch, model, dataloader, optimizer, num_classes, loss_func, epsilons,
         
         smoothed_targets = label_smoothing(targets, epsilons[indices], c, num_classes)
         epsilons[indices] += eta
+        model.eval()
         x = inner_maximization(model, loss_func, inputs, smoothed_targets, targets, 
                                epsilons[indices], alpha, num_steps)
-        
+
+        model.train()
         logits = model(x)
         t_or_f = torch.argmax(torch.softmax(logits, dim=1), dim=1).eq(targets)
         false_indices = indices[torch.where(t_or_f==False)[0]]
@@ -129,6 +133,14 @@ def train(epoch, model, dataloader, optimizer, num_classes, loss_func, epsilons,
         
         num_correct = torch.argmax(torch.softmax(logits, dim=1), dim=1).eq(targets).sum().item()
         train_rob_acc = 100 * (num_correct/inputs.size(0))
+
+        wandb.log(
+            {
+                'loss_train': loss.item(),
+                'rob_acc_train': train_rob_acc
+            }
+        )
+
         
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -205,8 +217,12 @@ if __name__ == '__main__':
     np.random.seed(args.seed_numpy)
     torch.manual_seed(args.seed_torch)
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpus
-    out_dir = os.path.join(args.checkpoint, args.dataset, args.loss_type)
+    out_dir = os.path.join(args.checkpoint+'-bug-fixed', args.dataset, args.loss_type)
     os.makedirs(out_dir, exist_ok=True)
+
+    wandb.init(project="Customized-AT", 
+               name='{dataset}-{loss}-bug-fixed'.format(dataset=args.dataset, loss=args.loss_type),
+               config=vars(args))
     
     train_transforms = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
@@ -234,23 +250,28 @@ if __name__ == '__main__':
               epsilons, args.alpha/255, args.num_steps, args.c, args.eta, args.epsilon_max/255)
         avg_nat, avg_rob = evaluation(epoch, model, test_dataloader, loss_func, 
                                       args.epsilon/255, args.alpha/255, 20)
+
+        wandb.log(
+            {
+                'nat_acc_test': avg_nat,
+                'rob_acc_test': avg_rob,
+            }
+        )
         logger_test.append([epoch+1, avg_nat, avg_rob])
+
+        checkpoint = {
+            'epoch': epoch+1,
+            'state_dict': model.state_dict(),
+            'test_nat_acc': avg_nat,
+            'test_rob_acc': avg_rob,
+            'optimizer': optimizer.state_dict()
+        }
         
+        torch.save(checkpoint, os.path.join(out_dir, 'std_checkpoint.pth.tar'))
         if avg_rob > best_acc:
             best_acc = avg_rob
-            best_checkpoint = {'epoch': epoch+1,
-                               'state_dict': model.state_dict(),
-                               'test_nat_acc': avg_nat,
-                               'test_rob_acc': avg_rob,
-                               'optimizer': optimizer.state_dict()}
-            torch.save(best_checkpoint, os.path.join(out_dir, 'bestpoint.pth.tar'))
+            torch.save(checkpoint, os.path.join(out_dir, 'bestpoint.pth.tar'))
             
-        std_checkpoint = {'epoch': epoch+1,
-                          'state_dict': model.state_dict(),
-                          'test_nat_acc': avg_nat,
-                          'test_rob_acc': avg_rob,
-                          'optimizer': optimizer.state_dict()}
-        torch.save(std_checkpoint, os.path.join(out_dir, 'std_checkpoint.pth.tar'))
         adjust_lr.step()
     
     
